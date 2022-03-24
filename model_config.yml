@@ -1,0 +1,14 @@
+project-name: ir50_onnx
+models:
+  ir50_onnx:
+    platform: onnx
+    model_file_path: ./models/ir50_onnx/backbone_ir50_asia.onnx
+    quantize: true
+    source: text
+    dataset: ./dataset.txt
+    configs:
+      quantized_dtype: asymmetric_quantized-u8
+      batch_size: 1
+      mean_values: [[127.5, 127.5, 127.5]]
+      std_values: [[127.5, 127.5, 127.5]]
+      reorder_channel: 0 1 2
