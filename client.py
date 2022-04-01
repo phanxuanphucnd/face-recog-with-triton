@@ -10,6 +10,7 @@ import numpy as np
 import tritonclient.http as httpclient
 import tritonclient.utils.shared_memory as shm
 
+from typing import List
 from tritonclient.utils import *
 
 
@@ -153,4 +154,57 @@ class ExtractorClient:
                 images_data_size
             )
 
-    def infer_by_frames(self):
+    def infer_by_frames(self, frames: np.ndarray, faces: List[np.ndarray]):
+        faces_data = np.concatenate(faces, axis=0).astype(np.float32)
+        nboxes_data = np.asarray([face.shape[0] for face in faces], dtype=np.uint32)
+
+        assert frames.shape[1] == self.image_input_shape[0]
+        assert frames.shape[2] == self.image_input_shape[1]
+
+        if self.using_shm:
+            shm.set_shared_memory_region(self.shm_image_data_handle, [frames])
+
+        inputs = [
+            httpclient.InferInput("IMAGE", frames.shape,
+                                  np_to_triton_dtype(frames.dtype)),
+            httpclient.InferInput("FACE_INFO", faces_data.shape,
+                                  np_to_triton_dtype(faces_data.dtype)),
+            httpclient.InferInput("NBOXES", nboxes_data.shape,
+                                  np_to_triton_dtype(nboxes_data.dtype)),
+        ]
+
+        images_data_size = frames.size * frames.itemsize
+        if self.using_shm:
+            inputs[0].set_shared_memory(self.shm_name, images_data_size)
+        else:
+            inputs[0].set_data_from_numpy(frames)
+
+        inputs[1].set_data_from_numpy(faces_data)
+        inputs[2].set_data_from_numpy(nboxes_data)
+
+        outputs = [
+            httpclient.InferRequestedOutput("OUTPUT"),
+        ]
+
+        response = self.client.infer(
+            self.model_name,
+            inputs,
+            request_id=uuid.uuid4().hex[:6],
+            outputs=outputs
+        )
+
+        response.get_response()
+        rets = response.as_numpy("OUTPUT")
+
+        ret_decode = []
+        for ret in rets:
+            ret_decode.append(json.loads(ret))
+
+        return ret_decode
+
+    def shutdown(self):
+        if self.using_shm:
+            shm.destroy_shared_memory_region(self.shm_image_data_handle)
+            self.client.unregister_system_shared_memory(name=self.shm_name)
+
+        self.client.close()
