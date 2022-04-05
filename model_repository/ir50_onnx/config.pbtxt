@@ -1,7 +1,7 @@
 name: "ir50_onnx"
 platform: "onnxruntime_onnx"
 backend: "onnxruntime"
-max_batch_size: 16
+max_batch_size: 32
 input [
     {
         name: "input.1"
@@ -18,15 +18,4 @@ output [
 
     }
 ]
-instance_group [
-    {
-      count: 4
-      kind: KIND_GPU
-      gpus: [ 0 ]
-    }
- ]
 
- dynamic_batching {
-    preferred_batch_size: [ 8, 16 ]
-    max_queue_delay_microseconds: 1
- }
