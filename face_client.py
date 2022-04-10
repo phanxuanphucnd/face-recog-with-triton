@@ -184,6 +184,7 @@ def requestGenerator(batched_image_data, input_name, output_name, dtype, FLAGS):
 
     # Set the input data
     batched_image_data = np.squeeze(batched_image_data, axis=0)
+    print('batched_image_data: ', batched_image_data.shape)
     inputs = [client.InferInput(input_name, batched_image_data.shape, dtype)]
     inputs[0].set_data_from_numpy(batched_image_data)
 
@@ -209,7 +210,7 @@ if __name__ == '__main__':
                         help='Use asynchronous inference API')
     parser.add_argument('--streaming', action="store_true", required=False, default=False,
                         help='Use streaming inference API. The flag is only available with gRPC protocol.')
-    parser.add_argument('-m', '--model-name', type=str, required=True,
+    parser.add_argument('-m', '--model-name', type=str, default='ir50_onnx',
                         help='Name of model')
     parser.add_argument('-x', '--model-version', type=str, required=False, default="",
                         help='Version of model. Default is to use latest version.')
@@ -219,25 +220,17 @@ if __name__ == '__main__':
                         help='Inference server URL. Default is localhost:8000.')
     parser.add_argument('-i', '--protocol', type=str, required=False, default='HTTP',
                         help='Protocol (HTTP/gRPC) used to communicate with the inference service. Default is HTTP.')
-    parser.add_argument('image_filename', type=str, nargs='?', default=None,
+    parser.add_argument('image_filename', type=str, nargs='?', default='imgs/thuyen1.jpeg',
                         help='Input image / Input folder.')
 
     FLAGS = parser.parse_args()
 
-    if FLAGS.streaming and FLAGS.protocol.lower() != "grpc":
-        raise Exception("Streaming is only allowed with gRPC protocol")
-
     try:
-        if FLAGS.protocol.lower() == "grpc":
-            # Create gRPC client for communicating with the server
-            triton_client = grpcclient.InferenceServerClient(
-                url=FLAGS.url, verbose=FLAGS.verbose)
-        else:
-            # Specify large enough concurrency to handle the
-            # the number of requests.
-            concurrency = 20 if FLAGS.async_set else 1
-            triton_client = httpclient.InferenceServerClient(
-                url=FLAGS.url, verbose=FLAGS.verbose, concurrency=concurrency)
+        # Specify large enough concurrency to handle the
+        # the number of requests.
+        concurrency = 20 if FLAGS.async_set else 1
+        triton_client = httpclient.InferenceServerClient(
+            url=FLAGS.url, verbose=FLAGS.verbose, concurrency=concurrency)
     except Exception as e:
         print("client creation failed: " + str(e))
         sys.exit(1)
@@ -333,63 +326,18 @@ if __name__ == '__main__':
             for inputs, outputs, model_name, model_version in requestGenerator(
                     batched_image_data, input_name, output_name, dtype, FLAGS):
                 sent_count += 1
-                if FLAGS.streaming:
-                    triton_client.async_stream_infer(
-                        FLAGS.model_name,
-                        inputs,
-                        request_id=str(sent_count),
-                        model_version=FLAGS.model_version,
-                        outputs=outputs)
-                elif FLAGS.async_set:
-                    if FLAGS.protocol.lower() == "grpc":
-                        triton_client.async_infer(
-                            FLAGS.model_name,
-                            inputs,
-                            partial(completion_callback, user_data),
-                            request_id=str(sent_count),
-                            model_version=FLAGS.model_version,
-                            outputs=outputs)
-                    else:
-                        async_requests.append(
-                            triton_client.async_infer(
-                                FLAGS.model_name,
-                                inputs,
-                                request_id=str(sent_count),
-                                model_version=FLAGS.model_version,
-                                outputs=outputs))
-                else:
-                    responses.append(
-                        triton_client.infer(FLAGS.model_name,
-                                            inputs,
-                                            request_id=str(sent_count),
-                                            model_version=FLAGS.model_version,
-                                            outputs=outputs))
+                responses.append(
+                    triton_client.infer(FLAGS.model_name,
+                                        inputs,
+                                        request_id=str(sent_count),
+                                        model_version=FLAGS.model_version,
+                                        outputs=outputs))
 
         except InferenceServerException as e:
             print("inference failed: " + str(e))
             if FLAGS.streaming:
                 triton_client.stop_stream()
             sys.exit(1)
-
-    if FLAGS.streaming:
-        triton_client.stop_stream()
-
-    if FLAGS.protocol.lower() == "grpc":
-        if FLAGS.streaming or FLAGS.async_set:
-            processed_count = 0
-            while processed_count < sent_count:
-                (results, error) = user_data._completed_requests.get()
-                processed_count += 1
-                if error is not None:
-                    print("inference failed: " + str(error))
-                    sys.exit(1)
-                responses.append(results)
-    else:
-        if FLAGS.async_set:
-            # Collect results from the ongoing async requests
-            # for HTTP Async requests.
-            for async_request in async_requests:
-                responses.append(async_request.get_result())
 
     for response in responses:
         if FLAGS.protocol.lower() == "grpc":
@@ -403,25 +351,5 @@ if __name__ == '__main__':
             np.save(f, feats1)
 
     print(f"Inference TRITON server time: {(timeit.default_timer() - now) / len(filenames)}")
-
-    # TODO: Get features from normal
-    # times = 0
-    # id = 0
-    # for i, filename in enumerate(filenames):
-    #     print(filename)
-    #     feats2, time = get_feats_from_onnx(img_path=filename, model_path='./models/ir50_onnx/backbone_ir50_asia.onnx')
-    #
-    #     times += time
-    #     id += 1
-    #
-    # print(f"Time sequential: {times / id}")
-    #
-    # print(type(feats1), np.shape(feats1))
-    # print(type(feats2), np.shape(feats2))
-    #
-    # cosin = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
-    # sim = cosin(torch.Tensor(feats1), torch.Tensor(feats2[0]))
-    #
-    # print(f"Similarity = {sim}")
 
     print("PASS")
