@@ -6,6 +6,7 @@ import cv2
 import json
 import uuid
 import random
+import timeit
 import numpy as np
 import tritonclient.http as httpclient
 from torchvision import transforms as trans
@@ -64,6 +65,7 @@ class RecognitionClient:
             httpclient.InferInput(input_name, image_data.shape, np_to_triton_dtype(image_data.dtype))
         ]
 
+
         images_data_size = image_data.size * image_data.itemsize
         if self.using_shm:
             inputs[0].set_shared_memory(self.shm_name, images_data_size)
@@ -74,20 +76,19 @@ class RecognitionClient:
             httpclient.InferRequestedOutput(output_name)
         ]
 
+        now = timeit.default_timer()
         response = self.client.infer(
             self.model_name,
             inputs,
             request_id=uuid.uuid4().hex[:6],
             outputs=outputs
         )
+        print(">>> ", timeit.default_timer() - now)
 
         response.get_response()
         rets = response.as_numpy(output_name)
 
-        ret_decode = []
-        print(type(rets), np.shape(rets))
-
-        return ret_decode
+        return rets
 
     def shutdown(self):
         if self.using_shm:
@@ -133,15 +134,23 @@ transforms = trans.Compose([
 ])
 
 if __name__ == '__main__':
+
     imgs_path = [
         'imgs/thuyen1.jpeg',
         'imgs/thuyen2.jpeg',
         'imgs/thuyen3.jpeg',
+        'imgs/thuyen4.jpeg',
+        'imgs/thuyen4.jpeg',
+        'imgs/thuyen4.jpeg',
         'imgs/thuyen4.jpeg'
     ]
     image_data = np.stack([preprocess(cv2.imread(x, cv2.IMREAD_COLOR)) for x in imgs_path])
     recognition_client = RecognitionClient(model_name='ir50_onnx', using_shm=False, max_batch_size=32)
 
+    now = timeit.default_timer()
+
     decoded_output = recognition_client.infer_by_frames(image_data, input_name='input.1', output_name='559')
+
+    print(timeit.default_timer() - now)
 
 
