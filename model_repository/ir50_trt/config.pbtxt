@@ -1,0 +1,24 @@
+name: "ir50_trt"
+platform: "tensorrt_plan"
+max_batch_size: 0
+input [
+    {
+        name: "input.1"
+        data_type: TYPE_FP32
+        format: FORMAT_NCHW
+        dims: [3, 112, 112]
+    }
+]
+output [
+    {
+        name: "559"
+        data_type: TYPE_FP32
+        dims: [1, 512]
+    }
+]
+
+instance_group [
+  {
+    kind: KIND_GPU
+  }
+]

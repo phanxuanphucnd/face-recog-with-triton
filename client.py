@@ -142,6 +142,7 @@ if __name__ == '__main__':
         'imgs/thuyen4.jpeg',
         'imgs/thuyen4.jpeg',
         'imgs/thuyen4.jpeg',
+        'imgs/thuyen4.jpeg',
         'imgs/thuyen4.jpeg'
     ]
     image_data = np.stack([preprocess(cv2.imread(x, cv2.IMREAD_COLOR)) for x in imgs_path])
