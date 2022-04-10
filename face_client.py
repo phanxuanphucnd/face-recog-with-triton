@@ -184,7 +184,7 @@ def requestGenerator(batched_image_data, input_name, output_name, dtype, FLAGS):
 
     # Set the input data
     batched_image_data = np.squeeze(batched_image_data, axis=0)
-    print(batched_image_data.shape)
+    print('batched_image_data: ', batched_image_data.shape)
     inputs = [client.InferInput(input_name, batched_image_data.shape, dtype)]
     inputs[0].set_data_from_numpy(batched_image_data)
 
@@ -210,7 +210,7 @@ if __name__ == '__main__':
                         help='Use asynchronous inference API')
     parser.add_argument('--streaming', action="store_true", required=False, default=False,
                         help='Use streaming inference API. The flag is only available with gRPC protocol.')
-    parser.add_argument('-m', '--model-name', type=str, required=True,
+    parser.add_argument('-m', '--model-name', type=str, default='ir50_onnx',
                         help='Name of model')
     parser.add_argument('-x', '--model-version', type=str, required=False, default="",
                         help='Version of model. Default is to use latest version.')
@@ -220,7 +220,7 @@ if __name__ == '__main__':
                         help='Inference server URL. Default is localhost:8000.')
     parser.add_argument('-i', '--protocol', type=str, required=False, default='HTTP',
                         help='Protocol (HTTP/gRPC) used to communicate with the inference service. Default is HTTP.')
-    parser.add_argument('image_filename', type=str, nargs='?', default=None,
+    parser.add_argument('image_filename', type=str, nargs='?', default='imgs/thuyen1.jpeg',
                         help='Input image / Input folder.')
 
     FLAGS = parser.parse_args()
@@ -326,37 +326,12 @@ if __name__ == '__main__':
             for inputs, outputs, model_name, model_version in requestGenerator(
                     batched_image_data, input_name, output_name, dtype, FLAGS):
                 sent_count += 1
-                if FLAGS.streaming:
-                    triton_client.async_stream_infer(
-                        FLAGS.model_name,
-                        inputs,
-                        request_id=str(sent_count),
-                        model_version=FLAGS.model_version,
-                        outputs=outputs)
-                elif FLAGS.async_set:
-                    if FLAGS.protocol.lower() == "grpc":
-                        triton_client.async_infer(
-                            FLAGS.model_name,
-                            inputs,
-                            partial(completion_callback, user_data),
-                            request_id=str(sent_count),
-                            model_version=FLAGS.model_version,
-                            outputs=outputs)
-                    else:
-                        async_requests.append(
-                            triton_client.async_infer(
-                                FLAGS.model_name,
-                                inputs,
-                                request_id=str(sent_count),
-                                model_version=FLAGS.model_version,
-                                outputs=outputs))
-                else:
-                    responses.append(
-                        triton_client.infer(FLAGS.model_name,
-                                            inputs,
-                                            request_id=str(sent_count),
-                                            model_version=FLAGS.model_version,
-                                            outputs=outputs))
+                responses.append(
+                    triton_client.infer(FLAGS.model_name,
+                                        inputs,
+                                        request_id=str(sent_count),
+                                        model_version=FLAGS.model_version,
+                                        outputs=outputs))
 
         except InferenceServerException as e:
             print("inference failed: " + str(e))
