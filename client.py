@@ -145,7 +145,7 @@ if __name__ == '__main__':
         'imgs/thuyen4.jpeg'
     ]
     image_data = np.stack([preprocess(cv2.imread(x, cv2.IMREAD_COLOR)) for x in imgs_path])
-    recognition_client = RecognitionClient(model_name='ir50_onnx', using_shm=False, max_batch_size=32)
+    recognition_client = RecognitionClient(model_name='ir50_onnx', using_shm=Tr, max_batch_size=32)
 
     now = timeit.default_timer()
 
